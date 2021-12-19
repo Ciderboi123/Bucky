@@ -1,4 +1,5 @@
 #include "include.hh"
+#include "spdlog/spdlog.h"
 
 #ifndef ASIO_STANDALONE
 namespace asio = boost::asio;
@@ -13,138 +14,38 @@ std::istream &safeGetline(std::istream &is, std::string &t);
 void filter(std::string &target, const std::string &pattern);
 
 int main() {
-    dpp::log::filter = dpp::log::info;
-    dpp::log::out = &std::cerr;
+    spdlog::set_pattern("[ %T ] - (%^%L%$) » %v");
 
-    std::cout << "Howdy, and thanks for trying out Discord++!\n"
-              << "Feel free to drop into the official server at "
-                 "https://discord.gg/VHAyrvspCx if you have any questions.\n\n"
-              << std::flush;
+    dpp::log::filter = dpp::log::error;
+    // dpp::log::out = &spdlog::err_handler;
 
-    std::cout << "Starting bot...\n\n";
+    spdlog::info("Starting Bot");
 
     std::string token = getToken();
     if (token.empty()) {
-        std::cerr << "CRITICAL: "
-                  << "There is no valid way for Echo to obtain a token! Use "
-                     "one of the following ways:"
-                  << std::endl
-                  << "(1) Fill the BOT_TOKEN environment variable with the "
-                     "token (e.g. 'Bot 123456abcdef')."
-                  << std::endl
-                  << "(2) Copy the example `token.eg.dat` as `token.dat` and "
-                     "write your own token to it.\n";
+        std::cerr << "No Token" << std::endl;
         exit(1);
     }
 
     // Create Bot object
     auto bot = std::make_shared<DppBot>();
-
-    // Don't complain about unhandled events
     bot->debugUnhandled = true;
-
-    // Declare the intent to receive guild messages
-    // You don't need `NONE` it's just to show you how to declare multiple
     bot->intents = dpp::intents::NONE | dpp::intents::GUILD_MESSAGES;
+    bot->prefix = "!";
 
-    /*/
-     * Create handler for the READY payload, this may be handled by the bot in
-    the future.
-     * The `self` object contains all information about the 'bot' user.
-    /*/
     json self;
-    bot->handlers.insert(
-        {"READY", [&self](json data) { self = data["user"]; }});
 
-    bot->prefix = "~";
-
-    bot->respond("help", "Mention me and I'll echo your message back!");
-
-    bot->respond("about", [&bot](json msg) {
+    bot->respond("ping", [&bot](json msg) {
         std::ostringstream content;
-        content
-            << "Sure thing, "
-            << (msg["member"]["nick"].is_null()
-                    ? msg["author"]["username"].get<std::string>()
-                    : msg["member"]["nick"].get<std::string>())
-            << "!\n"
-            << "I'm a simple bot meant to demonstrate the Discord++ library.\n"
-            << "You can learn more about Discord++ at "
-               "https://discord.gg/VHAyrvspCx";
+        content << "pong";
         bot->createMessage()
             ->channel_id(msg["channel_id"].get<dpp::Snowflake>())
             ->content(content.str())
             ->run();
     });
 
-    bot->respond("lookatthis", [&bot](json msg) {
-        std::ifstream ifs("image.jpg", std::ios::binary);
-        if (!ifs) {
-            std::cerr << "Couldn't load file 'image.jpg'!\n";
-            return;
-        }
-        ifs.seekg(0, std::ios::end);
-        std::ifstream::pos_type fileSize = ifs.tellg();
-        ifs.seekg(0, std::ios::beg);
-        auto file = std::make_shared<std::string>(fileSize, '\0');
-        ifs.read(file->data(), fileSize);
-
-        bot->createMessage()
-            ->channel_id(msg["channel_id"].get<dpp::Snowflake>())
-            ->content("Look at this photograph")
-            ->filename("image.jpg")
-            ->filetype("image/jpg")
-            ->file(file)
-            ->run();
-    });
-
-    bot->respond("channelinfo", [&bot](json msg) {
-        bot->getChannel()
-            ->channel_id(msg["channel_id"].get<dpp::Snowflake>())
-            ->onRead([&bot, msg](bool error, json res) {
-                bot->createMessage()
-                    ->channel_id(msg["channel_id"].get<dpp::Snowflake>())
-                    ->content("```json\n" + res["body"].dump(4) + "\n```")
-                    ->run();
-            })
-            ->run();
-    });
-
-    bot->respond("registerslash", [&bot, &self](json msg) {
-        if (msg["author"]["id"].get<std::string>() == "106615803402547200") {
-            bot->createGuildApplicationCommand()
-                ->application_id(self["id"].get<dpp::Snowflake>())
-                ->guild_id(msg["guild_id"].get<dpp::Snowflake>())
-                ->name("echo")
-                ->description("Echoes what you say")
-                ->options({{{"type", 3},
-                            {"name", "message"},
-                            {"description", "The message to echo"},
-                            {"required", true}}})
-                ->command_type(dpp::ApplicationCommandType::CHAT_INPUT)
-                ->onRead([](bool error, json res) {
-                    std::cout << res.dump(4) << std::endl;
-                })
-                ->run();
-        }
-    });
-
-    bot->interactionHandlers.insert(
-        {881674285683470376, [&bot, &self](json msg) {
-             bot->createResponse()
-                 ->interaction_id(msg["id"].get<dpp::Snowflake>())
-                 ->interaction_token(msg["token"].get<std::string>())
-                 ->interaction_type(
-                     dpp::InteractionCallbackType::CHANNEL_MESSAGE_WITH_SOURCE)
-                 ->data({{"content", msg["data"]["options"][0]["value"]}})
-                 ->run();
-         }});
-
-    // Create handler for the MESSAGE_CREATE payload, this receives all messages
-    // sent that the bot can see.
     bot->handlers.insert(
         {"MESSAGE_CREATE", [&bot, &self](json msg) {
-             // Ignore messages from other bots
              if (msg.contains("webhook_id") ||
                  (msg["author"].contains("bot") &&
                   msg["author"]["bot"].get<bool>())) {
@@ -192,7 +93,6 @@ int main() {
                             {"since", "null"}});
              }
          }});
-
     // Create Asio context, this handles async stuff.
     auto aioc = std::make_shared<asio::io_context>();
 
@@ -209,8 +109,8 @@ std::string getToken() {
     std::string token;
 
     /*
-                    First attempt to read the token from the BOT_TOKEN
-       environment variable.
+                                                                    First
+       attempt to read the token from the BOT_TOKEN environment variable.
     */
     char const *env = std::getenv("BOT_TOKEN");
     if (env != nullptr) {
