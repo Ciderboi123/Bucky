@@ -13,13 +13,14 @@ add_subdirectory(lib/plugin-overload)
 add_subdirectory(lib/plugin-responder)
 add_subdirectory(lib/plugin-interactionhandler)
 add_subdirectory(lib/plugin-ratelimit)
+add_subdirectory(lib/spdlog)
 
 list(JOIN ALL_DISCORDPP_PLUGINS , ALL_DISCORDPP_PLUGINS_JOINED)
 add_compile_definitions(ALL_DISCORDPP_PLUGINS=${ALL_DISCORDPP_PLUGINS_JOINED})
 
-set(SOURCE_FILES main.cc extern.cc)
+set(SOURCE_FILES src/main.cc src/extern.cc)
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
-target_precompile_headers(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include.hh)
+target_precompile_headers(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/src/include.hh)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
@@ -46,6 +47,7 @@ TARGET_LINK_LIBRARIES(
         ${PROJECT_NAME}
         ${Boost_LIBRARIES}
         Threads::Threads
+        spdlog
         ${OPENSSL_LIBRARIES}
         ${ALL_DISCORDPP_LIBRARIES}
 )
@@ -59,4 +61,3 @@ function(SYNC_FILE FILE)
 endfunction(SYNC_FILE)
 
 SYNC_FILE(token.dat)
-SYNC_FILE(image.jpg)

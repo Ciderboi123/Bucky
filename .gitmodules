@@ -22,3 +22,6 @@
 [submodule "lib/plugin-interactionhandler"]
 	path = lib/plugin-interactionhandler
 	url = https://github.com/DiscordPP/plugin-interactionhandler.git
+[submodule "lib/spdlog"]
+	path = lib/spdlog
+	url = https://github.com/gabime/spdlog.git
