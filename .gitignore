@@ -86,3 +86,4 @@ _deps
 # Custom
 build
 token.dat
+.vscode
